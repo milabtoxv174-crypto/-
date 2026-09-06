@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-serif-display {
+    font-family: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+  }
+  .font-serif-cormorant {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+  .font-royal-cormorant {
+    font-family: 'Cormorant Garamond', 'Forum', Georgia, serif;
+  }
+  .font-imperial-forum {
+    font-family: 'Forum', 'Cormorant Garamond', Georgia, serif;
+  }
+  .font-luxury-script {
+    font-family: 'Great Vibes', 'Playfair Display', cursive;
+  }
+  .font-sans-clean {
+    font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+  }
+  .gold-gradient-text {
+    color: #c5a059;
+    background: linear-gradient(135deg, #fdfcf0 0%, #e8ca8c 40%, #c5a059 80%, #9a7837 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gold-gradient-bg {
+    background: linear-gradient(135deg, #d8b46e 0%, #c5a059 50%, #9e7b36 100%);
+  }
+  .sophisticated-card {
+    background-color: #0a2a22;
+    border: 1px solid #c5a059;
+    box-shadow: 0 0 35px rgba(0,0,0,0.6);
+  }
+  .sophisticated-double-border {
+    border: 1px solid #c5a059;
+    outline: 1px solid #c5a059;
+    outline-offset: -6px;
+  }
+  .sophisticated-dot-bg {
+    background-image: radial-gradient(#c5a059 1px, transparent 1px);
+    background-size: 36px 36px;
+  }
+}
+
+body {
+  background-color: #051a14;
+  color: #fdfcf0;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #051a14;
+}
+::-webkit-scrollbar-thumb {
+  background: #123d32;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c5a059;
+}
+
+@keyframes floatLeaf {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(4deg);
+  }
+}
+
+.animate-float-subtle {
+  animation: floatLeaf 6s ease-in-out infinite;
+}
+

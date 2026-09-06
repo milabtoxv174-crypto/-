@@ -1,0 +1,6 @@
+{
+  "name": "Приглашение на свадьбу — Петр и Виктория",
+  "description": "Элегантное цифровое приглашение на свадьбу Петра и Виктории в изумрудно-осеннем стиле Клуб-Отеля Высокое",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
