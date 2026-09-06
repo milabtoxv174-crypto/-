@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle2, Heart, GlassWater, Bus, Sparkles, UserCheck } from 'lucide-react';
+import { Send, CheckCircle2, Heart, GlassWater, Bus, Sparkles, UserCheck, MessageSquare, Copy, Check } from 'lucide-react';
 import { RSVPResponse } from '../types';
 import { BotanicalCorner, FloralDivider } from './FloralDecor';
 
@@ -19,6 +19,24 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
   const [message, setMessage] = useState<string>('');
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [savedTicket, setSavedTicket] = useState<RSVPResponse | null>(null);
+  const [copiedConfirmation, setCopiedConfirmation] = useState<boolean>(false);
+
+  // Send webhook if configured
+  const sendWebhookRSVP = async (rsvp: RSVPResponse) => {
+    try {
+      const webhookUrl = localStorage.getItem('petr_viktoria_webhook_url');
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(rsvp),
+        });
+      }
+    } catch (e) {
+      console.warn("Webhook dispatch error", e);
+    }
+  };
 
   useEffect(() => {
     if (initialGuestName && !guestName) {
@@ -84,6 +102,7 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
 
     setSavedTicket(rsvp);
     setIsSubmitted(true);
+    sendWebhookRSVP(rsvp);
 
     if (onResponseSubmitted) {
       onResponseSubmitted(rsvp);
@@ -152,9 +171,9 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
                   </div>
 
                   <div className="flex justify-between items-center border-b border-[#c5a059]/30 pb-2.5">
-                    <span className="text-[#fdfcf0]/80">Нужен трансфер:</span>
+                    <span className="text-[#fdfcf0]/80">Трансфер до Высокого:</span>
                     <span className="font-medium text-[#ffffff]">
-                      {savedTicket.transferNeeded ? 'Да (из Смоленска)' : 'Нет, на своем транспорте'}
+                      {savedTicket.transferNeeded ? 'Да (от ЗАГСа)' : 'Нет, на своем транспорте'}
                     </span>
                   </div>
                 </>
@@ -169,6 +188,116 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Direct Send to Organizers / Coordinator */}
+            {(() => {
+              const statusText =
+                savedTicket.attendance === 'yes'
+                  ? 'С удовольствием приду!'
+                  : savedTicket.attendance === 'no'
+                  ? 'К сожалению, не смогу присутствовать'
+                  : 'Пока не уверен(а), сообщу позже';
+
+              const drinksText =
+                savedTicket.drinks && savedTicket.drinks.length > 0
+                  ? savedTicket.drinks.join(', ')
+                  : 'Не указаны';
+
+              const transferText = savedTicket.transferNeeded
+                ? 'Да (трансфер до Высокого)'
+                : 'Нет (свой транспорт)';
+
+              const formattedMessage =
+                `💍 Ответ на свадебное приглашение (30.09.2026):\n` +
+                `👤 Гость: ${savedTicket.guestName}\n` +
+                `✨ Статус: ${statusText}\n` +
+                (savedTicket.attendance === 'yes'
+                  ? `🍷 Напитки: ${drinksText}\n🚐 Трансфер: ${transferText}\n`
+                  : '') +
+                (savedTicket.message ? `💌 Пожелание: «${savedTicket.message}»\n` : '') +
+                `\nСвадьба Петра и Виктории 💍`;
+
+              // Phone from storage or coordinator Alina +7 960 585-08-17
+              const organizerPhone =
+                localStorage.getItem('petr_viktoria_organizer_phone') || '79605850817';
+              const cleanPhone = organizerPhone.replace(/\D/g, '');
+
+              const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                formattedMessage
+              )}`;
+
+              const telegramUrl = `https://t.me/+Yskw-Adk00o5YTli`;
+
+              const handleCopyText = () => {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(formattedMessage);
+                  setCopiedConfirmation(true);
+                  setTimeout(() => setCopiedConfirmation(false), 3000);
+                }
+              };
+
+              return (
+                <div className="bg-[#0a2a22] border-2 border-[#ffd700] rounded-xl p-4 sm:p-5 text-left space-y-3 shadow-2xl">
+                  <div className="flex items-center space-x-2 text-[#ffd700]">
+                    <Sparkles className="w-4 h-4 text-[#ffd700]" />
+                    <span className="font-sans-clean text-xs uppercase tracking-wider font-bold">
+                      Мгновенная отправка ответа молодоженам
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#fdfcf0]/90 font-sans-clean leading-relaxed font-normal">
+                    Нажмите кнопку ниже, чтобы отправить готовый ответ в мессенджер или общий свадебный чат:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-3 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-sans-clean font-semibold rounded-lg flex items-center justify-center space-x-2 transition-all shadow cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>💬 Отредактировать в WhatsApp</span>
+                    </a>
+
+                    <a
+                      href={telegramUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        // Also copy the message text so the guest can easily paste it in the Telegram group
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(formattedMessage);
+                        }
+                      }}
+                      className="px-4 py-3 bg-sky-700 hover:bg-sky-600 text-white text-xs font-sans-clean font-semibold rounded-lg flex items-center justify-center space-x-2 transition-all shadow cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>💬 Отредактировать в Telegram</span>
+                    </a>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={handleCopyText}
+                      className="text-xs text-[#ffd700] hover:text-[#ffffff] flex items-center space-x-1.5 transition-colors cursor-pointer py-1"
+                    >
+                      {copiedConfirmation ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400 font-medium">Текст ответа скопирован!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Скопировать текст ответа</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             <p className="font-sans-clean text-[#ffd700] text-sm font-medium">
               Спасибо! С нетерпением ждем встречи с вами 30 сентября 2026 года!
@@ -286,7 +415,7 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
                 <div className="pt-3 border-t border-[#c5a059]/30">
                   <label className="block font-sans-clean text-xs font-semibold uppercase tracking-wider text-[#c5a059] mb-2 flex items-center">
                     <Bus className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
-                    Трансфер из Смоленска
+                    Трансфер до Высокого
                   </label>
                   <div
                     onClick={() => setTransferNeeded(!transferNeeded)}
@@ -297,7 +426,7 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
                         Мне нужен трансфер от ЗАГСа до Клуб-Отеля «Высокое»
                       </span>
                       <span className="font-sans-clean text-xs text-[#fdfcf0]/80">
-                        Автобус заберет гостей после росписи и доставит на банкет
+                        Организован трансфер только до площадки. Обратного трансфера нет (можно забронировать домик или доехать самостоятельно)
                       </span>
                     </div>
                     <div

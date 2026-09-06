@@ -156,15 +156,13 @@ export default function App() {
               {copiedLink ? 'Ссылка скопирована' : 'Поделиться приглашением'}
             </button>
 
-            {isAdminUser && (
-              <button
-                onClick={() => setIsOrganizerOpen(true)}
-                className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#c5a059] text-xs font-sans-clean rounded border border-[#c5a059] flex items-center transition-all cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-                Панель молодоженов
-              </button>
-            )}
+            <button
+              onClick={() => setIsOrganizerOpen(true)}
+              className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] text-xs font-sans-clean rounded border border-[#c5a059] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02]"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
+              Панель организатора / Ответы
+            </button>
           </div>
 
           <div className="text-[11px] text-[#fdfcf0]/50 pt-4 font-sans-clean">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Clock, Copy, Check, ExternalLink, Heart, GlassWater, Navigation, Sparkles } from 'lucide-react';
+import { MapPin, Clock, Copy, Check, ExternalLink, Heart, GlassWater, Navigation, Sparkles, Moon, Bus, Home } from 'lucide-react';
 import { BotanicalCorner, FloralDivider } from './FloralDecor';
 
 export const ScheduleTimeline: React.FC = () => {
@@ -255,6 +255,50 @@ export const ScheduleTimeline: React.FC = () => {
           </div>
 
           <div className="hidden sm:block sm:w-1/2" />
+        </div>
+
+        {/* Item 4: 23:00 - Окончание вечера */}
+        <div className="relative flex flex-col sm:flex-row items-start group">
+          {/* Timeline Icon Badge */}
+          <div className="absolute left-4 sm:left-1/2 transform -translate-x-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-[#051a14] border-2 border-[#c5a059] text-[#ffd700] shadow-xl">
+            <Moon className="w-5 h-5 fill-current" />
+          </div>
+
+          <div className="hidden sm:block sm:w-1/2" />
+
+          {/* Time & Card Content (Right side) */}
+          <div className="ml-12 sm:ml-0 sm:w-1/2 sm:pl-10 w-full">
+            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-6 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
+              <div className="inline-flex items-center space-x-1.5 font-sans-clean text-xs uppercase tracking-widest text-[#ffd700] mb-2 bg-[#051a14] px-3.5 py-1 rounded-full border border-[#c5a059]/60 font-semibold">
+                <Clock className="w-3.5 h-3.5" />
+                <span>23:00</span>
+              </div>
+
+              <h3 className="font-serif-display text-2xl sm:text-3xl text-[#ffffff] font-normal mt-1 mb-2">
+                Окончание вечера
+              </h3>
+
+              <div className="font-sans-clean text-sm text-[#ffd700] font-semibold mb-1">
+                Клуб-Отель «Высокое»
+              </div>
+
+              <div className="font-sans-clean text-xs text-[#fdfcf0]/90 mb-4 flex items-center gap-1 font-normal">
+                <MapPin className="w-3.5 h-3.5 text-[#ffd700] shrink-0" />
+                <span>Смоленская область, пос. Высокое, ул. Центральная, 1</span>
+              </div>
+
+              <p className="font-sans-clean text-sm text-[#fdfcf0] leading-relaxed mb-4 font-normal">
+                Завершение праздничного банкета, яркий финал вечера и теплые проводы молодоженов.
+              </p>
+
+              <div className="flex items-start gap-2 pt-3 border-t border-[#c5a059]/40 text-xs font-sans-clean text-[#ffd700]">
+                <Home className="w-4 h-4 shrink-0 text-[#ffd700] mt-0.5" />
+                <span className="text-[#fdfcf0]/90">
+                  Обратный трансфер не предусмотрен: гости могут остаться на ночь, заранее забронировав уютные домики в Клуб-Отеле «Высокое», либо самостоятельно добраться до Смоленска.
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>

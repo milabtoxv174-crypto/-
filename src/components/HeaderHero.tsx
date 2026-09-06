@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Sparkles, Calendar, MapPin, Heart, Disc, Music, Copy, Check, Link as LinkIcon, Share2 } from 'lucide-react';
+import { Volume2, VolumeX, Sparkles, Calendar, MapPin, Heart, Disc, Music } from 'lucide-react';
 import { weddingAudioPlayer, PlayerState } from '../utils/audio';
 import { BotanicalCorner, FloralDivider, BotanicalWreathBadge } from './FloralDecor';
-import { formatGuestSalutation, buildGuestUrl } from '../utils/greeting';
+import { formatGuestSalutation } from '../utils/greeting';
 import heroCouplePhoto from '../assets/images/fbb441c5-19e5-4b2d-b923-749f4beffe6e.jpg';
 
 interface HeaderHeroProps {
   guestName: string;
-  setGuestName: (name: string) => void;
+  setGuestName?: (name: string) => void;
   isPlayingMusic?: boolean;
   onToggleMusic: () => void;
   isLeavesActive: boolean;
@@ -18,7 +18,7 @@ interface HeaderHeroProps {
 
 export const HeaderHero: React.FC<HeaderHeroProps> = ({
   guestName,
-  setGuestName,
+  setGuestName: _unusedSetGuestName,
   isPlayingMusic: _unused,
   onToggleMusic,
   isLeavesActive,
@@ -28,18 +28,6 @@ export const HeaderHero: React.FC<HeaderHeroProps> = ({
 }) => {
   const [playerState, setPlayerState] = useState<PlayerState>(weddingAudioPlayer.getState());
   const [scrollY, setScrollY] = useState(0);
-  const [copiedGuestLink, setCopiedGuestLink] = useState(false);
-
-  const handleCopyGuestLink = (e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    if (!guestName.trim()) return;
-    const url = buildGuestUrl(guestName);
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url);
-      setCopiedGuestLink(true);
-      setTimeout(() => setCopiedGuestLink(false), 3500);
-    }
-  };
 
   useEffect(() => {
     const unsubscribe = weddingAudioPlayer.subscribe((state) => {
@@ -160,50 +148,8 @@ export const HeaderHero: React.FC<HeaderHeroProps> = ({
             </div>
           </BotanicalWreathBadge>
 
-          {/* Personalized Guest Greeting Input & Link Generator */}
-          <div className="my-4 max-w-md w-full mx-auto">
-            <div className="relative inline-block w-full">
-              <input
-                type="text"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Введите имя гостя (например: Анна или Михаил и Елена)..."
-                className="w-full bg-[#051a14] border-2 border-[#1d5844] focus:border-[#c5a059] rounded-lg px-4 py-2.5 text-center text-sm text-[#ffffff] placeholder-[#719b8c] focus:outline-none transition-all shadow-inner font-sans-clean font-medium"
-              />
-              {guestName.trim() ? (
-                <div className="mt-2 flex flex-col items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleCopyGuestLink}
-                    className="inline-flex items-center space-x-1.5 bg-[#0a2a22] hover:bg-[#124235] text-[#ffd700] border border-[#c5a059] px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shadow-md active:scale-95 cursor-pointer"
-                    title="Скопировать персональную ссылку для отправки гостю"
-                  >
-                    {copiedGuestLink ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-300">Ссылка скопирована в буфер!</span>
-                      </>
-                    ) : (
-                      <>
-                        <LinkIcon className="w-3.5 h-3.5 text-[#ffd700]" />
-                        <span>Скопировать персональную ссылку для {guestName}</span>
-                      </>
-                    )}
-                  </button>
-                  <span className="text-[11px] text-[#c5a059]/80 font-sans-clean text-center">
-                    Отправьте эту ссылку гостю в мессенджер — она откроет сайт с его именем
-                  </span>
-                </div>
-              ) : (
-                <span className="block text-xs text-[#c5a059]/80 mt-1.5 font-sans-clean">
-                  Введите имя гостя выше, чтобы сразу сгенерировать для него ссылку
-                </span>
-              )}
-            </div>
-          </div>
-
           {/* Greeting Heading - Natural Russian Salutation */}
-          <h2 className="font-serif-display text-2xl sm:text-3xl text-[#ffffff] font-normal mt-2 mb-3">
+          <h2 className="font-serif-display text-2xl sm:text-3xl text-[#ffffff] font-normal mt-4 mb-3">
             {formatGuestSalutation(guestName)}
           </h2>
 

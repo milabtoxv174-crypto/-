@@ -69,7 +69,7 @@ export const DetailsFAQ: React.FC = () => {
 
             <div className="pt-4">
               <a
-                href="https://t.me/+PnlNxyGM2QowYTIy"
+                href="https://t.me/+Yskw-Adk00o5YTli"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center px-4 py-3 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] hover:text-[#ffffff] border border-[#c5a059] rounded-lg font-sans-clean text-xs uppercase tracking-wider font-semibold transition-all hover:scale-[1.01] shadow-sm"

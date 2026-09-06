@@ -52,10 +52,10 @@ export const VenueHighlight: React.FC = () => {
                 <Bus className="w-5 h-5" />
               </div>
               <h4 className="font-sans-clean font-semibold text-sm text-[#ffffff] mb-1.5">
-                Трансфер для гостей
+                Трансфер до Высокого
               </h4>
               <p className="font-sans-clean text-xs text-[#fdfcf0]/90 leading-relaxed font-normal">
-                Будет организован трансфер от ЗАГСа до Клуб-Отеля и обратные рейсы вечером в Смоленск.
+                Организован трансфер от ЗАГСа в Смоленске до Клуб-Отеля «Высокое». Обратного трансфера нет.
               </p>
             </div>
 
@@ -64,10 +64,10 @@ export const VenueHighlight: React.FC = () => {
                 <Car className="w-5 h-5" />
               </div>
               <h4 className="font-sans-clean font-semibold text-sm text-[#ffffff] mb-1.5">
-                Парковка
+                Парковка & Проезд
               </h4>
               <p className="font-sans-clean text-xs text-[#fdfcf0]/90 leading-relaxed font-normal">
-                На территории Клуб-Отеля предусмотрена удобная охраняемая бесплатная парковка для всех гостей.
+                Бесплатная парковка на территории. Гости без ночевки добираются обратно в Смоленск самостоятельно.
               </p>
             </div>
 
@@ -76,10 +76,10 @@ export const VenueHighlight: React.FC = () => {
                 <Hotel className="w-5 h-5" />
               </div>
               <h4 className="font-sans-clean font-semibold text-sm text-[#ffffff] mb-1.5">
-                Проживание
+                Домики & Номера
               </h4>
               <p className="font-sans-clean text-xs text-[#fdfcf0]/90 leading-relaxed font-normal">
-                При желании остаться на ночь вы можете забронировать уютный номер или коттедж на территории комплекса.
+                Предлагаем гостям забронировать уютные домики на территории «Высокое», чтобы с комфортом остаться на ночь.
               </p>
             </div>
           </div>
