@@ -21,6 +21,9 @@ import {
   ChevronDown,
   ChevronUp,
   FileSpreadsheet,
+  Lock,
+  Key,
+  LogOut,
 } from 'lucide-react';
 import { RSVPResponse } from '../types';
 import { buildGuestUrl, formatGuestSalutation } from '../utils/greeting';
@@ -28,14 +31,16 @@ import { buildGuestUrl, formatGuestSalutation } from '../utils/greeting';
 interface OrganizerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onExitAdmin?: () => void;
 }
 
-export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose }) => {
+export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose, onExitAdmin }) => {
   const [activeTab, setActiveTab] = useState<'rsvps' | 'links' | 'settings'>('rsvps');
   const [rsvps, setRsvps] = useState<RSVPResponse[]>([]);
   const [genGuestName, setGenGuestName] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedInviteText, setCopiedInviteText] = useState(false);
+  const [copiedAdminLink, setCopiedAdminLink] = useState(false);
 
   // Manual Add Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -114,6 +119,17 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose 
       navigator.clipboard.writeText(text);
       setCopiedInviteText(true);
       setTimeout(() => setCopiedInviteText(false), 3000);
+    }
+  };
+
+  const handleCopyAdminLink = () => {
+    const adminUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}?admin=true`
+      : '';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(adminUrl);
+      setCopiedAdminLink(true);
+      setTimeout(() => setCopiedAdminLink(false), 3000);
     }
   };
 
@@ -250,12 +266,25 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose 
               Панель организатора / Молодоженов
             </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-[#fdfcf0]/70 hover:text-[#fdfcf0] hover:bg-[#0a2a22] transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {onExitAdmin && (
+              <button
+                type="button"
+                onClick={onExitAdmin}
+                className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800/60 rounded text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                title="Выйти из режима координатора (скрыть кнопку внизу)"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Скрыть панель</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-[#fdfcf0]/70 hover:text-[#fdfcf0] hover:bg-[#0a2a22] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -751,6 +780,45 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose 
                     {settingsSaved ? '✓ Сохранено!' : 'Сохранить настройки'}
                   </button>
                 </form>
+              </div>
+
+              {/* Secret Admin Link Card */}
+              <div className="bg-[#051a14] border-2 border-[#ffd700]/70 rounded-xl p-4 sm:p-5 space-y-3 text-xs font-sans-clean">
+                <div className="flex items-center space-x-2 text-[#ffd700]">
+                  <Key className="w-4 h-4 text-[#ffd700]" />
+                  <span className="font-serif-display text-base font-semibold text-[#fdfcf0]">
+                    Секретная ссылка для доступа организатора
+                  </span>
+                </div>
+                <p className="text-xs text-[#fdfcf0]/80 leading-relaxed">
+                  Обычные гости по персональным ссылкам <strong>не видят</strong> кнопку панели организатора. Чтобы открыть панель на любом устройстве, используйте секретную ссылку с параметром <code className="text-[#ffd700] bg-[#0a2a22] px-1 py-0.5 rounded">?admin=true</code> или кликните 3 раза по именам «Петр &amp; Виктория» в подвале сайта.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}?admin=true` : ''}
+                    className="flex-1 bg-[#0a2a22] border border-[#1d5844] rounded-lg px-3 py-2 text-[11px] text-[#c5a059] font-mono select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyAdminLink}
+                    className="px-3 py-2 bg-[#ffd700] hover:bg-[#ffe234] text-[#051a14] font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {copiedAdminLink ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-800" />
+                        <span>Скопировано!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Скопировать админ-ссылку</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Coordinator card */}

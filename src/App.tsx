@@ -25,12 +25,16 @@ export default function App() {
   const [isOrganizerOpen, setIsOrganizerOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [titleClickCount, setTitleClickCount] = useState(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('admin') === 'true' || params.get('edit') === 'true') {
+      // Check if organizer/admin mode is activated via URL (?admin=true or ?edit=true) or saved in localStorage
+      const isSavedAdmin = localStorage.getItem('petr_viktoria_admin_session') === 'true';
+      if (params.get('admin') === 'true' || params.get('edit') === 'true' || isSavedAdmin) {
         setIsAdminUser(true);
+        localStorage.setItem('petr_viktoria_admin_session', 'true');
       }
       const guest = params.get('guest') || params.get('name');
       if (guest) {
@@ -38,6 +42,27 @@ export default function App() {
       }
     }
   }, []);
+
+  // Secret unlock: clicking the names in the footer 3 times toggles organizer access
+  const handleSecretTitleClick = () => {
+    const nextCount = titleClickCount + 1;
+    setTitleClickCount(nextCount);
+    if (nextCount >= 3) {
+      const newAdminState = !isAdminUser;
+      setIsAdminUser(newAdminState);
+      localStorage.setItem('petr_viktoria_admin_session', newAdminState ? 'true' : 'false');
+      setTitleClickCount(0);
+      if (newAdminState) {
+        setIsOrganizerOpen(true);
+      }
+    }
+  };
+
+  const handleExitAdmin = () => {
+    setIsAdminUser(false);
+    localStorage.removeItem('petr_viktoria_admin_session');
+    setIsOrganizerOpen(false);
+  };
 
   const handleOpenEnvelope = () => {
     setShowEnvelope(false);
@@ -139,7 +164,11 @@ export default function App() {
       {/* Footer & Organizer Access */}
       <footer className="border-t border-[#c5a059]/30 py-10 px-4 bg-[#051a14] text-center">
         <div className="max-w-xl mx-auto space-y-4">
-          <div className="font-serif-display text-2xl text-[#c5a059] tracking-widest font-semibold">
+          <div
+            onClick={handleSecretTitleClick}
+            className="font-serif-display text-2xl text-[#c5a059] tracking-widest font-semibold cursor-pointer select-none transition-opacity hover:opacity-90"
+            title="Петр & Виктория"
+          >
             Петр & Виктория
           </div>
 
@@ -156,13 +185,16 @@ export default function App() {
               {copiedLink ? 'Ссылка скопирована' : 'Поделиться приглашением'}
             </button>
 
-            <button
-              onClick={() => setIsOrganizerOpen(true)}
-              className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] text-xs font-sans-clean rounded border border-[#c5a059] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02]"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
-              Панель организатора / Ответы
-            </button>
+            {/* Organizer button is ONLY shown in admin mode */}
+            {isAdminUser && (
+              <button
+                onClick={() => setIsOrganizerOpen(true)}
+                className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] text-xs font-sans-clean rounded border border-[#c5a059] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02] animate-fadeIn"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
+                Панель организатора / Ответы
+              </button>
+            )}
           </div>
 
           <div className="text-[11px] text-[#fdfcf0]/50 pt-4 font-sans-clean">
@@ -175,6 +207,7 @@ export default function App() {
       <OrganizerModal
         isOpen={isOrganizerOpen}
         onClose={() => setIsOrganizerOpen(false)}
+        onExitAdmin={handleExitAdmin}
       />
 
       {/* Global In-DOM HTML5 Audio Element for Cross-Platform Reliability */}
