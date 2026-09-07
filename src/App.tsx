@@ -16,7 +16,7 @@ import { ScrollReveal } from './components/ScrollReveal';
 import { MusicPlayerWidget } from './components/MusicPlayerWidget';
 import { GlobalAudioPlayer } from './components/GlobalAudioPlayer';
 import { weddingAudioPlayer } from './utils/audio';
-import { Heart, ShieldCheck, Share2, Sparkles, MapPin } from 'lucide-react';
+import { Heart, ShieldCheck, Share2, Sparkles, MapPin, Link as LinkIcon, FileSpreadsheet } from 'lucide-react';
 
 export default function App() {
   const [showEnvelope, setShowEnvelope] = useState(true);
@@ -24,45 +24,28 @@ export default function App() {
   const [isLeavesActive, setIsLeavesActive] = useState(true);
   const [isOrganizerOpen, setIsOrganizerOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [titleClickCount, setTitleClickCount] = useState(0);
+  const [isGuestMode, setIsGuestMode] = useState<boolean>(false);
+  const [organizerDefaultTab, setOrganizerDefaultTab] = useState<'rsvps' | 'links' | 'sheets' | 'settings'>('links');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      // Check if organizer/admin mode is activated via URL (?admin=true or ?edit=true) or saved in localStorage
-      const isSavedAdmin = localStorage.getItem('petr_viktoria_admin_session') === 'true';
-      if (params.get('admin') === 'true' || params.get('edit') === 'true' || isSavedAdmin) {
-        setIsAdminUser(true);
-        localStorage.setItem('petr_viktoria_admin_session', 'true');
-      }
-      const guest = params.get('guest') || params.get('name');
-      if (guest) {
-        setGuestName(decodeURIComponent(guest));
+      const guestParam = (params.get('guest') || params.get('name') || '').trim();
+
+      if (guestParam) {
+        // PERSONAL GUEST LINK:
+        // When opened via ?guest=Имя or ?name=Имя
+        // Strict read-only guest format without editing controls or organizer buttons.
+        setIsGuestMode(true);
+        setGuestName(decodeURIComponent(guestParam));
+        setIsOrganizerOpen(false);
+      } else {
+        // MAIN MASTER LINK:
+        // Host/Organizer main link has full access to link creation and organizer panel!
+        setIsGuestMode(false);
       }
     }
   }, []);
-
-  // Secret unlock: clicking the names in the footer 3 times toggles organizer access
-  const handleSecretTitleClick = () => {
-    const nextCount = titleClickCount + 1;
-    setTitleClickCount(nextCount);
-    if (nextCount >= 3) {
-      const newAdminState = !isAdminUser;
-      setIsAdminUser(newAdminState);
-      localStorage.setItem('petr_viktoria_admin_session', newAdminState ? 'true' : 'false');
-      setTitleClickCount(0);
-      if (newAdminState) {
-        setIsOrganizerOpen(true);
-      }
-    }
-  };
-
-  const handleExitAdmin = () => {
-    setIsAdminUser(false);
-    localStorage.removeItem('petr_viktoria_admin_session');
-    setIsOrganizerOpen(false);
-  };
 
   const handleOpenEnvelope = () => {
     setShowEnvelope(false);
@@ -103,6 +86,57 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#051a14] text-[#fdfcf0] font-sans-clean relative selection:bg-[#c5a059] selection:text-[#051a14] overflow-x-hidden">
+      {/* Top Bar for Master Link (Host / Organizer) */}
+      {!isGuestMode && !showEnvelope && (
+        <header className="sticky top-0 z-40 bg-[#051a14]/95 backdrop-blur-md border-b border-[#c5a059]/40 py-2.5 px-4 shadow-lg">
+          <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center space-x-2 text-[#ffd700]">
+              <ShieldCheck className="w-4 h-4 text-[#ffd700]" />
+              <span className="font-serif-display text-sm font-semibold tracking-wide text-[#fdfcf0]">
+                Основная ссылка организатора
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrganizerDefaultTab('links');
+                  setIsOrganizerOpen(true);
+                }}
+                className="px-3 py-1.5 bg-[#ffd700] hover:bg-[#ffe234] text-[#051a14] font-bold rounded-md flex items-center gap-1.5 transition-all shadow cursor-pointer text-xs"
+              >
+                <LinkIcon className="w-3.5 h-3.5 text-[#051a14]" />
+                <span>Создать ссылку для гостя</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrganizerDefaultTab('sheets');
+                  setIsOrganizerOpen(true);
+                }}
+                className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] border border-[#ffd700]/60 rounded-md flex items-center gap-1.5 transition-all cursor-pointer text-xs"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Google Таблица</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrganizerDefaultTab('rsvps');
+                  setIsOrganizerOpen(true);
+                }}
+                className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0] border border-[#c5a059]/50 rounded-md flex items-center gap-1.5 transition-all cursor-pointer text-xs"
+              >
+                <span>Ответы гостей</span>
+              </button>
+            </div>
+          </div>
+        </header>
+      )}
+
       {/* Envelope Opening Screen */}
       {showEnvelope && (
         <EnvelopeModal guestName={guestName} onOpen={handleOpenEnvelope} />
@@ -161,14 +195,10 @@ export default function App() {
         </ScrollReveal>
       </main>
 
-      {/* Footer & Organizer Access */}
+      {/* Footer & Mode Specific Controls */}
       <footer className="border-t border-[#c5a059]/30 py-10 px-4 bg-[#051a14] text-center">
         <div className="max-w-xl mx-auto space-y-4">
-          <div
-            onClick={handleSecretTitleClick}
-            className="font-serif-display text-2xl text-[#c5a059] tracking-widest font-semibold cursor-pointer select-none transition-opacity hover:opacity-90"
-            title="Петр & Виктория"
-          >
+          <div className="font-serif-display text-2xl text-[#c5a059] tracking-widest font-semibold select-none">
             Петр & Виктория
           </div>
 
@@ -176,26 +206,56 @@ export default function App() {
             С любовью ждём вас 30 сентября 2026 года!
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              onClick={handleShareApp}
-              className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0] text-xs font-sans-clean rounded border border-[#c5a059]/40 flex items-center transition-all cursor-pointer"
-            >
-              <Share2 className="w-3.5 h-3.5 mr-1.5 text-[#c5a059]" />
-              {copiedLink ? 'Ссылка скопирована' : 'Поделиться приглашением'}
-            </button>
+          {/* Mode-specific actions: Main Organizer vs Guest */}
+          {!isGuestMode ? (
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrganizerDefaultTab('links');
+                    setIsOrganizerOpen(true);
+                  }}
+                  className="px-4 py-2.5 bg-[#ffd700] hover:bg-[#ffe234] text-[#051a14] font-bold text-xs font-sans-clean rounded-lg border border-[#ffd700] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02]"
+                >
+                  <LinkIcon className="w-3.5 h-3.5 mr-1.5 text-[#051a14]" />
+                  <span>Создать персональную ссылку для гостя</span>
+                </button>
 
-            {/* Organizer button is ONLY shown in admin mode */}
-            {isAdminUser && (
-              <button
-                onClick={() => setIsOrganizerOpen(true)}
-                className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] text-xs font-sans-clean rounded border border-[#c5a059] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02] animate-fadeIn"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
-                Панель организатора / Ответы
-              </button>
-            )}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrganizerDefaultTab('rsvps');
+                    setIsOrganizerOpen(true);
+                  }}
+                  className="px-4 py-2.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] text-xs font-sans-clean rounded-lg border border-[#c5a059] flex items-center transition-all cursor-pointer shadow-md hover:scale-[1.02]"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-[#ffd700]" />
+                  <span>Панель ответов гостей</span>
+                </button>
+              </div>
+
+              <p className="text-[11px] text-[#fdfcf0]/60 max-w-md mx-auto leading-normal">
+                👑 Режим организатора: создание ссылок, редактирование и просмотр анкет доступны только на этой основной ссылке.
+              </p>
+            </div>
+          ) : (
+            <div className="pt-2 space-y-2">
+              <p className="text-xs text-[#ffd700] font-serif-display italic">
+                Персональное приглашение для: <span className="text-[#ffffff] font-normal not-italic">{guestName}</span>
+              </p>
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleShareApp}
+                  className="px-4 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0] text-xs font-sans-clean rounded border border-[#c5a059]/40 flex items-center transition-all cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1.5 text-[#c5a059]" />
+                  {copiedLink ? 'Ссылка скопирована' : 'Поделиться приглашением'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="text-[11px] text-[#fdfcf0]/50 pt-4 font-sans-clean">
             30.09.2026 — Дворец бракосочетания (Смоленск) & Клуб-Отель «Высокое»
@@ -207,7 +267,7 @@ export default function App() {
       <OrganizerModal
         isOpen={isOrganizerOpen}
         onClose={() => setIsOrganizerOpen(false)}
-        onExitAdmin={handleExitAdmin}
+        defaultTab={organizerDefaultTab}
       />
 
       {/* Global In-DOM HTML5 Audio Element for Cross-Platform Reliability */}

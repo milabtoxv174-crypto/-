@@ -23,34 +23,22 @@ export const Gallery: React.FC = () => {
     }
   }, []);
 
-  // Load photos on mount from IndexedDB if user customized them, otherwise use DEFAULT_WEDDING_PHOTOS
+  // Load photos: strictly enforce the ideal 9 photos in the requested screenshot order
   useEffect(() => {
     let isMounted = true;
 
     async function initPhotos() {
       try {
         const stored = await loadStoredPhotos();
-        if (stored && stored.length > 0 && isMounted) {
+        // If user manually configured exactly 9 custom photos via admin mode
+        if (stored && stored.length === 9 && isMounted) {
           setPhotos(stored);
           return;
         }
 
-        // Check if static photos are provided in /photos/
-        try {
-          const res = await fetch('/photos/wedding_photo_01.jpg', { method: 'HEAD' });
-          if (res.ok) {
-            const detected: string[] = [];
-            for (let i = 1; i <= 12; i++) {
-              const num = i < 10 ? `0${i}` : `${i}`;
-              detected.push(`/photos/wedding_photo_${num}.jpg`);
-            }
-            if (isMounted) {
-              setPhotos(detected);
-              return;
-            }
-          }
-        } catch {
-          // Ignore network probe error
+        // If stored contains stale/different count (e.g. older 12-photo set), clear and use ideal 9
+        if (stored && stored.length !== 9) {
+          await clearStoredPhotos();
         }
 
         if (isMounted) {
@@ -167,7 +155,7 @@ export const Gallery: React.FC = () => {
                 className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#051a14] hover:bg-[#113a30] text-[#c5a059] border border-[#c5a059]/50 rounded-lg text-xs font-sans-clean transition-colors cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>{photos.length > 0 ? 'Заменить / Добавить фото' : 'Загрузить 12 фото'}</span>
+                <span>{photos.length > 0 ? 'Заменить / Добавить фото' : 'Загрузить 9 фото'}</span>
               </button>
 
               {photos.length > 0 && (
@@ -209,7 +197,7 @@ export const Gallery: React.FC = () => {
           </div>
         )}
 
-        {/* Empty State: Prompt to upload the 12 photos */}
+        {/* Empty State: Prompt to upload the 9 photos */}
         {!isLoading && photos.length === 0 && (
           <div
             onDragOver={(e) => {
@@ -234,11 +222,11 @@ export const Gallery: React.FC = () => {
             </div>
 
             <h3 className="font-serif-display text-xl text-[#fdfcf0] font-normal mb-2">
-              Загрузите ваши 12 фотографий
+              Свадебные фотографии (9 шт.)
             </h3>
 
             <p className="font-sans-clean text-sm text-[#fdfcf0]/80 max-w-md mx-auto mb-5 leading-relaxed">
-              Перетащите все 12 фото сюда или нажмите кнопку, чтобы выбрать их с устройства. Фотографии отобразятся в полном качестве без сторонних подписей.
+              Перетащите 9 фото сюда или нажмите кнопку, чтобы выбрать их с устройства. Фотографии отобразятся в полном качестве без сторонних подписей.
             </p>
 
             <button

@@ -24,23 +24,46 @@ import {
   Lock,
   Key,
   LogOut,
+  ExternalLink,
 } from 'lucide-react';
 import { RSVPResponse } from '../types';
 import { buildGuestUrl, formatGuestSalutation } from '../utils/greeting';
+import {
+  GOOGLE_APPS_SCRIPT_TEMPLATE,
+  getGoogleSheetsWebhookUrl,
+  setGoogleSheetsWebhookUrl,
+  sendRsvpToGoogleSheets,
+  exportRsvpsToCsv,
+} from '../utils/googleSheetsSync';
+
+interface SavedGuestLink {
+  id: string;
+  name: string;
+  salutation: string;
+  url: string;
+  createdAt: number;
+}
 
 interface OrganizerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultTab?: 'rsvps' | 'links' | 'sheets' | 'settings';
   onExitAdmin?: () => void;
 }
 
-export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose, onExitAdmin }) => {
-  const [activeTab, setActiveTab] = useState<'rsvps' | 'links' | 'settings'>('rsvps');
+export const OrganizerModal: React.FC<OrganizerModalProps> = ({
+  isOpen,
+  onClose,
+  defaultTab = 'links',
+  onExitAdmin,
+}) => {
+  const [activeTab, setActiveTab] = useState<'rsvps' | 'links' | 'sheets' | 'settings'>(defaultTab);
   const [rsvps, setRsvps] = useState<RSVPResponse[]>([]);
   const [genGuestName, setGenGuestName] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedInviteText, setCopiedInviteText] = useState(false);
   const [copiedAdminLink, setCopiedAdminLink] = useState(false);
+  const [savedGuestLinks, setSavedGuestLinks] = useState<SavedGuestLink[]>([]);
 
   // Manual Add Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -50,10 +73,18 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
   const [addTransfer, setAddTransfer] = useState(true);
   const [addNote, setAddNote] = useState('');
 
-  // Settings State
+  // Settings & Google Sheets State
   const [organizerPhone, setOrganizerPhone] = useState('79605850817');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
+  const [googleSheetsSaved, setGoogleSheetsSaved] = useState(false);
+  const [testSyncStatus, setTestSyncStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [testSyncMessage, setTestSyncMessage] = useState<string | null>(null);
+  const [bulkSyncStatus, setBulkSyncStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [bulkSyncMessage, setBulkSyncMessage] = useState<string | null>(null);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [showScriptCode, setShowScriptCode] = useState(false);
 
   const drinkOptions = [
     'Шампанское / Игристое',
@@ -66,17 +97,90 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
 
   const loadSettings = () => {
     const savedPhone = localStorage.getItem('petr_viktoria_organizer_phone') || '79605850817';
-    const savedWebhook = localStorage.getItem('petr_viktoria_webhook_url') || '';
+    const savedWebhook = getGoogleSheetsWebhookUrl();
     setOrganizerPhone(savedPhone);
     setWebhookUrl(savedWebhook);
+    setGoogleSheetsUrl(savedWebhook);
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('petr_viktoria_organizer_phone', organizerPhone.trim());
-    localStorage.setItem('petr_viktoria_webhook_url', webhookUrl.trim());
+    setGoogleSheetsWebhookUrl(webhookUrl.trim());
     setSettingsSaved(true);
     setTimeout(() => setSettingsSaved(false), 2500);
+  };
+
+  const handleSaveGoogleSheetsUrl = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setGoogleSheetsWebhookUrl(googleSheetsUrl);
+    setWebhookUrl(googleSheetsUrl.trim());
+    setGoogleSheetsSaved(true);
+    setTimeout(() => setGoogleSheetsSaved(false), 2500);
+  };
+
+  const handleTestGoogleSheets = async () => {
+    const url = googleSheetsUrl.trim();
+    if (!url) {
+      setTestSyncStatus('error');
+      setTestSyncMessage('Сначала введите ссылку на веб-приложение Google Таблицы.');
+      return;
+    }
+    setTestSyncStatus('sending');
+    setTestSyncMessage('Отправляем тестовую строку...');
+
+    const testRsvp: RSVPResponse = {
+      id: 'test_' + Date.now(),
+      guestName: 'Тестовый Гость (Проверка связи)',
+      attendance: 'yes',
+      drinks: ['Шампанское / Игристое', 'Белое вино'],
+      transferNeeded: true,
+      message: 'Тест синхронизации с Google Таблицей прошел успешно!',
+      submittedAt: new Date().toISOString(),
+    };
+
+    const success = await sendRsvpToGoogleSheets(testRsvp, url);
+    if (success) {
+      setTestSyncStatus('success');
+      setTestSyncMessage('✓ Тестовый запрос отправлен! Проверьте вашу Google Таблицу — в ней появилась строка с тестовым гостем.');
+    } else {
+      setTestSyncStatus('error');
+      setTestSyncMessage('Ошибка при отправке. Проверьте правильность URL веб-приложения Google Таблицы (должен оканчиваться на /exec).');
+    }
+  };
+
+  const handleBulkSyncToGoogleSheets = async () => {
+    const url = googleSheetsUrl.trim();
+    if (!url) {
+      setBulkSyncStatus('error');
+      setBulkSyncMessage('Сначала сохраните ссылку на Google Таблицу.');
+      return;
+    }
+    if (rsvps.length === 0) {
+      setBulkSyncStatus('error');
+      setBulkSyncMessage('Список ответов гостей пока пуст.');
+      return;
+    }
+
+    setBulkSyncStatus('sending');
+    setBulkSyncMessage(`Синхронизация ${rsvps.length} ответов...`);
+
+    let sent = 0;
+    for (const r of rsvps) {
+      await sendRsvpToGoogleSheets(r, url);
+      sent++;
+    }
+
+    setBulkSyncStatus('success');
+    setBulkSyncMessage(`✓ Все ответы (${sent}) успешно отправлены в Google Таблицу!`);
+  };
+
+  const handleCopyAppsScript = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 3000);
+    }
   };
 
   const loadRSVPs = () => {
@@ -92,16 +196,72 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
     }
   };
 
+  const loadSavedLinks = () => {
+    try {
+      const raw = localStorage.getItem('petr_viktoria_saved_guest_links');
+      if (raw) {
+        setSavedGuestLinks(JSON.parse(raw));
+      } else {
+        setSavedGuestLinks([]);
+      }
+    } catch (e) {
+      console.warn('Failed to read saved links', e);
+    }
+  };
+
+  const saveGuestLinkToList = (name: string, url: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const salutation = formatGuestSalutation(trimmed);
+    const existing = savedGuestLinks.find((l) => l.name.toLowerCase() === trimmed.toLowerCase());
+    let updated: SavedGuestLink[];
+    if (existing) {
+      updated = savedGuestLinks.map((l) =>
+        l.id === existing.id ? { ...l, url, salutation, createdAt: Date.now() } : l
+      );
+    } else {
+      const newEntry: SavedGuestLink = {
+        id: 'link_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        name: trimmed,
+        salutation,
+        url,
+        createdAt: Date.now(),
+      };
+      updated = [newEntry, ...savedGuestLinks];
+    }
+    setSavedGuestLinks(updated);
+    try {
+      localStorage.setItem('petr_viktoria_saved_guest_links', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save links to localStorage', e);
+    }
+  };
+
+  const handleDeleteSavedLink = (id: string) => {
+    const updated = savedGuestLinks.filter((l) => l.id !== id);
+    setSavedGuestLinks(updated);
+    try {
+      localStorage.setItem('petr_viktoria_saved_guest_links', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to delete saved link', e);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       loadRSVPs();
       loadSettings();
+      loadSavedLinks();
+      if (defaultTab) {
+        setActiveTab(defaultTab);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, defaultTab]);
 
   const handleCopyPersonalLink = () => {
     if (!genGuestName.trim()) return;
     const url = buildGuestUrl(genGuestName.trim());
+    saveGuestLinkToList(genGuestName.trim(), url);
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
       setCopiedLink(true);
@@ -112,6 +272,7 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
   const handleCopyInviteMessage = () => {
     if (!genGuestName.trim()) return;
     const url = buildGuestUrl(genGuestName.trim());
+    saveGuestLinkToList(genGuestName.trim(), url);
     const salutation = formatGuestSalutation(genGuestName.trim());
     const text = `${salutation}\nМы с радостью приглашаем вас на нашу свадьбу 30 сентября 2026 года в Смоленске (Клуб-Отель «Высокое»).\n\nВаше персональное приглашение доступно по ссылке:\n${url}\n\nПожалуйста, подтвердите присутствие в анкете гостя! С любовью, Петр и Виктория 💍`;
 
@@ -119,6 +280,24 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
       navigator.clipboard.writeText(text);
       setCopiedInviteText(true);
       setTimeout(() => setCopiedInviteText(false), 3000);
+    }
+  };
+
+  const handleCopyExistingLink = (url: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
+
+  const handleCopyExistingMessage = (name: string, url: string) => {
+    const salutation = formatGuestSalutation(name);
+    const text = `${salutation}\nМы с радостью приглашаем вас на нашу свадьбу 30 сентября 2026 года в Смоленске (Клуб-Отель «Высокое»).\n\nВаше персональное приглашение доступно по ссылке:\n${url}\n\nПожалуйста, подтвердите присутствие в анкете гостя! С любовью, Петр и Виктория 💍`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedInviteText(true);
+      setTimeout(() => setCopiedInviteText(false), 2500);
     }
   };
 
@@ -288,41 +467,60 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-[#c5a059]/30 bg-[#07201a] px-4 gap-2">
-          <button
-            onClick={() => setActiveTab('rsvps')}
-            className={`py-3 px-3 sm:px-4 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
-              activeTab === 'rsvps'
-                ? 'border-[#ffd700] text-[#ffd700]'
-                : 'border-transparent text-[#fdfcf0]/70 hover:text-[#fdfcf0]'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Ответы гостей ({rsvps.length})</span>
-          </button>
-
+        <div className="flex border-b border-[#c5a059]/30 bg-[#07201a] px-3 sm:px-4 gap-1.5 sm:gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('links')}
-            className={`py-3 px-3 sm:px-4 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`py-3 px-2.5 sm:px-3 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'links'
                 ? 'border-[#ffd700] text-[#ffd700]'
                 : 'border-transparent text-[#fdfcf0]/70 hover:text-[#fdfcf0]'
             }`}
           >
-            <LinkIcon className="w-4 h-4" />
-            <span>Генератор ссылок</span>
+            <LinkIcon className="w-3.5 h-3.5" />
+            <span>Ссылки гостей</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('rsvps')}
+            className={`py-3 px-2.5 sm:px-3 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'rsvps'
+                ? 'border-[#ffd700] text-[#ffd700]'
+                : 'border-transparent text-[#fdfcf0]/70 hover:text-[#fdfcf0]'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Ответы ({rsvps.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sheets')}
+            className={`py-3 px-2.5 sm:px-3 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'sheets'
+                ? 'border-[#ffd700] text-[#ffd700]'
+                : 'border-transparent text-[#fdfcf0]/70 hover:text-[#fdfcf0]'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="flex items-center gap-1">
+              <span>Google Таблица</span>
+              {googleSheetsUrl ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="Подключено" />
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-amber-400/80 inline-block" title="Требуется ссылка" />
+              )}
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`py-3 px-3 sm:px-4 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`py-3 px-2.5 sm:px-3 text-xs font-sans-clean font-semibold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'settings'
                 ? 'border-[#ffd700] text-[#ffd700]'
                 : 'border-transparent text-[#fdfcf0]/70 hover:text-[#fdfcf0]'
             }`}
           >
-            <Settings className="w-4 h-4" />
-            <span>Как получать ответы</span>
+            <Settings className="w-3.5 h-3.5" />
+            <span>Настройки</span>
           </button>
         </div>
 
@@ -671,6 +869,7 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
           {/* TAB 2: LINK GENERATOR */}
           {activeTab === 'links' && (
             <div className="space-y-4">
+              {/* How it works info box */}
               <div className="bg-[#051a14] border border-[#c5a059] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
                 <div className="flex items-center space-x-2 text-[#ffd700]">
                   <LinkIcon className="w-4 h-4 text-[#ffd700]" />
@@ -678,28 +877,60 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
                     Генератор персональных приглашений для гостей
                   </h4>
                 </div>
-                <p className="text-xs text-[#fdfcf0]/80 font-sans-clean leading-relaxed">
-                  Введите имя гостя (или пары), чтобы получить персональную ссылку. При открытии сайт встретит гостя по имени и автоматически заполнит его имя в анкете!
-                </p>
 
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="bg-[#0a2a22] border border-[#c5a059]/40 rounded-lg p-3 text-xs space-y-2 text-[#fdfcf0]/90">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#ffd700] text-sm leading-none mt-0.5">👑</span>
+                    <div>
+                      <strong className="text-[#ffd700]">Ваша основная ссылка:</strong> это ссылка организатора, по которой вы находитесь сейчас. Здесь доступны создание ссылок, редактирование и список ответов.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-400 text-sm leading-none mt-0.5">💌</span>
+                    <div>
+                      <strong className="text-emerald-300">Персональная ссылка гостя:</strong> готовый формат без редактирования! Гость открывает её и видит приглашение со своим именем («Дорогой Иван!», «Дорогие Иван и Мария!»), а панель организатора для него полностью скрыта.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Name Suggestions */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="block text-[11px] font-semibold text-[#c5a059] uppercase tracking-wider">
+                    Быстрый выбор или пример:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Иван', 'Анна', 'Иван и Мария', 'Семья Ивановых', 'Мама и Папа', 'Бабушка и Дедушка'].map((template) => (
+                      <button
+                        key={template}
+                        type="button"
+                        onClick={() => setGenGuestName(template)}
+                        className="px-2.5 py-1 bg-[#0a2a22] hover:bg-[#133e31] border border-[#c5a059]/40 hover:border-[#ffd700] rounded text-[11px] text-[#fdfcf0] cursor-pointer transition-colors"
+                      >
+                        + {template}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Name Input & Generate Button */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
                   <input
                     type="text"
                     value={genGuestName}
                     onChange={(e) => setGenGuestName(e.target.value)}
-                    placeholder="Имя гостя (например: Иван или Иван и Мария)..."
+                    placeholder="Введите имя гостя (например: Иван или Иван и Мария)..."
                     className="flex-1 bg-[#0a2a22] border border-[#1d5844] focus:border-[#c5a059] rounded-lg px-3 py-2.5 text-xs text-[#ffffff] placeholder-[#719b8c] focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleCopyPersonalLink}
                     disabled={!genGuestName.trim()}
-                    className="px-4 py-2.5 bg-[#c5a059] hover:bg-[#dfba6d] disabled:opacity-40 text-[#051a14] font-medium text-xs rounded-lg transition-all flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+                    className="px-4 py-2.5 bg-[#ffd700] hover:bg-[#ffe234] disabled:opacity-40 text-[#051a14] font-bold text-xs rounded-lg transition-all flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer shadow"
                   >
                     {copiedLink ? (
                       <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Ссылка скопирована!</span>
+                        <Check className="w-3.5 h-3.5 text-[#051a14]" />
+                        <span>Скопировано!</span>
                       </>
                     ) : (
                       <>
@@ -710,96 +941,373 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
                   </button>
                 </div>
 
+                {/* Action Card when name is filled */}
                 {genGuestName.trim() && (
-                  <div className="bg-[#0a2a22]/70 border border-[#c5a059]/30 rounded-lg p-3 text-xs font-sans-clean space-y-2.5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-[#ffd700]">
-                      <span>Обращение на сайте: <strong>{formatGuestSalutation(genGuestName)}</strong></span>
+                  <div className="bg-[#0a2a22] border border-[#c5a059]/60 rounded-lg p-3.5 text-xs font-sans-clean space-y-3 mt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                      <span className="text-[#fdfcf0]">
+                        Обращение к гостю: <strong className="text-[#ffd700]">{formatGuestSalutation(genGuestName)}</strong>
+                      </span>
+                      <span className="text-emerald-400 font-semibold text-[11px]">
+                        ✓ Режим гостя (без редактирования)
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-[#051a14] rounded border border-[#1d5844] font-mono text-[11px] text-[#ffd700] break-all select-all">
+                      {buildGuestUrl(genGuestName)}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         type="button"
                         onClick={handleCopyInviteMessage}
-                        className="text-sky-300 hover:text-sky-200 underline cursor-pointer text-[11px] text-left"
+                        className="px-3 py-2 bg-[#051a14] hover:bg-[#0c2f25] border border-[#c5a059] text-[#ffd700] font-semibold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
-                        {copiedInviteText ? '✓ Текст скопирован в буфер' : '📋 Скопировать готовое сообщение для Telegram/WhatsApp'}
+                        {copiedInviteText ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Текст скопирован!</span>
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="w-3.5 h-3.5 text-[#c5a059]" />
+                            <span>Скопировать готовый текст для WhatsApp/Telegram</span>
+                          </>
+                        )}
                       </button>
-                    </div>
-                    <div className="p-2 bg-[#051a14] rounded border border-[#1d5844] font-mono text-[11px] text-[#c5a059] break-all select-all">
-                      {buildGuestUrl(genGuestName)}
+
+                      <a
+                        href={buildGuestUrl(genGuestName)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0] border border-[#c5a059]/50 hover:border-[#ffd700] rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                        title="Открыть в новой вкладке и увидеть, как сайт выглядит для гостя"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-[#ffd700]" />
+                        <span>Открыть как гость (в новой вкладке)</span>
+                      </a>
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Saved guest links address book */}
+              {savedGuestLinks.length > 0 && (
+                <div className="bg-[#051a14] border border-[#c5a059]/50 rounded-xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-serif-display text-sm font-semibold text-[#ffd700] flex items-center gap-2">
+                      <span>Созданные ссылки для гостей ({savedGuestLinks.length})</span>
+                    </h5>
+                    <span className="text-[10px] text-[#fdfcf0]/60">
+                      Сохранены в памяти вашего браузера
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {savedGuestLinks.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-[#0a2a22] border border-[#c5a059]/30 rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs hover:border-[#c5a059] transition-colors"
+                      >
+                        <div className="min-w-[140px]">
+                          <span className="font-semibold text-[#fdfcf0] block">{item.name}</span>
+                          <span className="text-[10px] text-[#c5a059]">{item.salutation}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyExistingLink(item.url)}
+                            className="px-2.5 py-1 bg-[#051a14] hover:bg-[#0c2f25] border border-[#c5a059]/40 hover:border-[#ffd700] text-[#ffd700] rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Скопировать ссылку"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Ссылка</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyExistingMessage(item.name, item.url)}
+                            className="px-2.5 py-1 bg-[#051a14] hover:bg-[#0c2f25] border border-[#c5a059]/40 hover:border-[#ffd700] text-[#fdfcf0] rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Скопировать готовое сообщение"
+                          >
+                            <MessageSquare className="w-3 h-3 text-[#c5a059]" />
+                            <span>Сообщение</span>
+                          </button>
+
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 text-[#fdfcf0]/60 hover:text-[#ffd700] transition-colors"
+                            title="Открыть как гость в новой вкладке"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSavedLink(item.id)}
+                            className="p-1 text-[#fdfcf0]/40 hover:text-red-400 transition-colors cursor-pointer"
+                            title="Удалить из списка"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 3: SETTINGS & INSTRUCTIONS */}
-          {activeTab === 'settings' && (
+          {/* TAB 3: GOOGLE SHEETS INTEGRATION */}
+          {activeTab === 'sheets' && (
             <div className="space-y-4">
-              <div className="bg-[#051a14] border border-[#c5a059]/60 rounded-xl p-4 sm:p-5 space-y-4 text-xs font-sans-clean">
-                <h4 className="font-serif-display text-base text-[#ffffff] font-semibold flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-[#ffd700]" />
-                  <span>Куда гостям отправлять ответы</span>
-                </h4>
-
-                <form onSubmit={handleSaveSettings} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#c5a059] uppercase mb-1">
-                      Номер телефона для WhatsApp (куда отправляются ответы):
-                    </label>
-                    <input
-                      type="text"
-                      value={organizerPhone}
-                      onChange={(e) => setOrganizerPhone(e.target.value)}
-                      placeholder="79605850817"
-                      className="w-full bg-[#0a2a22] border border-[#1d5844] focus:border-[#c5a059] rounded-lg px-3 py-2 text-xs text-[#ffffff] focus:outline-none"
-                    />
-                    <span className="text-[11px] text-[#fdfcf0]/60 block mt-1">
-                      По умолчанию указан номер координатора Алины (+7 960 585-08-17). Вы можете вписать свой номер телефона.
-                    </span>
+              {/* Status Header */}
+              <div className="bg-[#051a14] border-2 border-[#c5a059]/70 rounded-xl p-4 sm:p-5 space-y-3 font-sans-clean">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                    <h4 className="font-serif-display text-base sm:text-lg text-[#fdfcf0] font-semibold">
+                      Синхронизация с Google Таблицей
+                    </h4>
                   </div>
+                  {googleSheetsUrl ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 w-fit">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Подключено
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-950/80 text-amber-300 border border-amber-700/60 w-fit">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      Требуется ссылка
+                    </span>
+                  )}
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#c5a059] uppercase mb-1">
-                      Webhook URL (опционально для Google Таблицы / Telegram бота):
-                    </label>
+                <p className="text-xs text-[#fdfcf0]/80 leading-relaxed">
+                  Когда гость подтверждает присутствие на сайте, ответ мгновенно сохраняется в вашу личную Google Таблицу (имя, статус, напитки, трансфер, пожелание).
+                </p>
+
+                {/* URL Input Form */}
+                <form onSubmit={handleSaveGoogleSheetsUrl} className="space-y-2 pt-1">
+                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-[#ffd700]">
+                    URL веб-приложения Google Apps Script (заканчивается на /exec):
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="url"
-                      value={webhookUrl}
-                      onChange={(e) => setWebhookUrl(e.target.value)}
+                      value={googleSheetsUrl}
+                      onChange={(e) => setGoogleSheetsUrl(e.target.value)}
                       placeholder="https://script.google.com/macros/s/.../exec"
-                      className="w-full bg-[#0a2a22] border border-[#1d5844] focus:border-[#c5a059] rounded-lg px-3 py-2 text-xs text-[#ffffff] focus:outline-none"
+                      className="flex-1 bg-[#0a2a22] border border-[#1d5844] focus:border-[#ffd700] rounded-lg px-3 py-2 text-xs text-[#ffffff] font-mono focus:outline-none"
                     />
-                    <span className="text-[11px] text-[#fdfcf0]/60 block mt-1">
-                      Если у вас есть Google Apps Script или Formspree, вставьте ссылку сюда — каждый ответ гостя будет автоматически отправляться туда.
-                    </span>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-[#ffd700] hover:bg-[#ffe234] text-[#051a14] font-bold text-xs rounded-lg transition-all cursor-pointer shrink-0"
+                    >
+                      {googleSheetsSaved ? '✓ Сохранено!' : 'Сохранить ссылку'}
+                    </button>
                   </div>
+                </form>
+
+                {/* Quick action buttons */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-[#c5a059]/20">
+                  <button
+                    type="button"
+                    onClick={handleTestGoogleSheets}
+                    disabled={testSyncStatus === 'sending'}
+                    className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] border border-[#c5a059]/60 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{testSyncStatus === 'sending' ? 'Отправка...' : 'Отправить тестовую строку'}</span>
+                  </button>
 
                   <button
-                    type="submit"
-                    className="px-4 py-2 bg-[#c5a059] hover:bg-[#dfba6d] text-[#051a14] font-bold text-xs rounded-lg transition-all cursor-pointer"
+                    type="button"
+                    onClick={handleBulkSyncToGoogleSheets}
+                    disabled={bulkSyncStatus === 'sending'}
+                    className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0] border border-[#c5a059]/60 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    {settingsSaved ? '✓ Сохранено!' : 'Сохранить настройки'}
+                    <Users className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Выгрузить все ответы ({rsvps.length}) в таблицу</span>
                   </button>
-                </form>
+
+                  <button
+                    type="button"
+                    onClick={() => exportRsvpsToCsv(rsvps)}
+                    className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#fdfcf0]/90 border border-[#c5a059]/40 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer ml-auto"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Скачать CSV</span>
+                  </button>
+                </div>
+
+                {/* Feedback notices */}
+                {testSyncMessage && (
+                  <div
+                    className={`p-3 rounded-lg text-xs leading-relaxed ${
+                      testSyncStatus === 'success'
+                        ? 'bg-emerald-950/80 border border-emerald-700/60 text-emerald-200'
+                        : 'bg-red-950/80 border border-red-700/60 text-red-200'
+                    }`}
+                  >
+                    {testSyncMessage}
+                  </div>
+                )}
+
+                {bulkSyncMessage && (
+                  <div
+                    className={`p-3 rounded-lg text-xs leading-relaxed ${
+                      bulkSyncStatus === 'success'
+                        ? 'bg-emerald-950/80 border border-emerald-700/60 text-emerald-200'
+                        : 'bg-amber-950/80 border border-amber-700/60 text-amber-200'
+                    }`}
+                  >
+                    {bulkSyncMessage}
+                  </div>
+                )}
               </div>
 
-              {/* Secret Admin Link Card */}
+              {/* Step-by-Step Setup Guide */}
+              <div className="bg-[#051a14] border border-[#c5a059]/50 rounded-xl p-4 sm:p-5 space-y-3 text-xs font-sans-clean">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-serif-display text-base text-[#ffd700] font-semibold flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-[#ffd700]" />
+                    <span>Как настроить Google Таблицу за 2 минуты</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleCopyAppsScript}
+                    className="px-3 py-1.5 bg-[#c5a059] hover:bg-[#dfba6d] text-[#051a14] font-bold rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {copiedScript ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Код скопирован!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Скопировать готовый код скрипта</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-[#fdfcf0]/85 leading-relaxed pt-1">
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      1
+                    </span>
+                    <div>
+                      Откройте{' '}
+                      <a
+                        href="https://sheets.new"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#ffd700] underline font-semibold inline-flex items-center gap-1"
+                      >
+                        Google Таблицы (нажмите сюда, чтобы создать новую)
+                        <ExternalLink className="w-3 h-3" />
+                      </a>{' '}
+                      и назовите её, например: <em>«Свадьба Петра и Виктории — Ответы»</em>.
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      2
+                    </span>
+                    <div>
+                      В верхнем меню таблицы нажмите <strong>«Расширения»</strong> (Extensions) → <strong>«Apps Script»</strong>.
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      3
+                    </span>
+                    <div>
+                      В открывшемся окне редактора сотрите весь текст и вставьте готовый код (нажмите кнопку <strong>«Скопировать готовый код скрипта»</strong> выше).
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      4
+                    </span>
+                    <div>
+                      Справа вверху нажмите синюю кнопку <strong>«Начать развертывание»</strong> (Deploy) → <strong>«Новое развертывание»</strong> (New deployment).
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      5
+                    </span>
+                    <div>
+                      Нажмите на шестеренку рядом с «Выберите тип» и выберите <strong>«Веб-приложение»</strong> (Web app).<br />
+                      В пункте «У кого есть доступ» (Who has access) обязательно выберите: <strong>«Все» (Anyone)</strong>!
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 bg-[#0a2a22] p-2.5 rounded-lg border border-[#1d5844]/60">
+                    <span className="w-5 h-5 rounded-full bg-[#c5a059] text-[#051a14] font-bold flex items-center justify-center shrink-0 text-xs">
+                      6
+                    </span>
+                    <div>
+                      Нажмите <strong>«Развернуть»</strong> (Deploy), скопируйте полученный <strong>URL веб-приложения</strong> (заканчивается на <code>/exec</code>) и вставьте в поле на этой странице. Готово!
+                    </div>
+                  </div>
+                </div>
+
+                {/* Script Code Viewer Toggle */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowScriptCode(!showScriptCode)}
+                    className="text-xs text-[#ffd700]/90 hover:text-[#ffd700] flex items-center gap-1 cursor-pointer"
+                  >
+                    {showScriptCode ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    <span>{showScriptCode ? 'Скрыть код скрипта' : 'Посмотреть исходный код скрипта'}</span>
+                  </button>
+
+                  {showScriptCode && (
+                    <div className="mt-2 relative">
+                      <pre className="p-3 bg-[#03100c] border border-[#1d5844] rounded-lg text-[11px] text-[#e0e0d0] font-mono overflow-x-auto max-h-60">
+                        {GOOGLE_APPS_SCRIPT_TEMPLATE}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: SETTINGS & INSTRUCTIONS */}
+          {activeTab === 'settings' && (
+            <div className="space-y-4">
+              {/* Main Host URL Card */}
               <div className="bg-[#051a14] border-2 border-[#ffd700]/70 rounded-xl p-4 sm:p-5 space-y-3 text-xs font-sans-clean">
                 <div className="flex items-center space-x-2 text-[#ffd700]">
                   <Key className="w-4 h-4 text-[#ffd700]" />
                   <span className="font-serif-display text-base font-semibold text-[#fdfcf0]">
-                    Секретная ссылка для доступа организатора
+                    Ваша основная ссылка (для жениха, невесты и организатора)
                   </span>
                 </div>
                 <p className="text-xs text-[#fdfcf0]/80 leading-relaxed">
-                  Обычные гости по персональным ссылкам <strong>не видят</strong> кнопку панели организатора. Чтобы открыть панель на любом устройстве, используйте секретную ссылку с параметром <code className="text-[#ffd700] bg-[#0a2a22] px-1 py-0.5 rounded">?admin=true</code> или кликните 3 раза по именам «Петр &amp; Виктория» в подвале сайта.
+                  По этой основной ссылке открывается сайт с доступом к панели управления, созданию ссылок для гостей и синхронизации ответов с Google Таблицей. Сохраните её в закладки!
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">
                   <input
                     type="text"
                     readOnly
-                    value={typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}?admin=true` : ''}
-                    className="flex-1 bg-[#0a2a22] border border-[#1d5844] rounded-lg px-3 py-2 text-[11px] text-[#c5a059] font-mono select-all"
+                    value={typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''}
+                    className="flex-1 bg-[#0a2a22] border border-[#1d5844] rounded-lg px-3 py-2 text-[11px] text-[#ffd700] font-mono select-all"
                   />
                   <button
                     type="button"
@@ -814,7 +1322,7 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({ isOpen, onClose,
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5" />
-                        <span>Скопировать админ-ссылку</span>
+                        <span>Скопировать ссылку</span>
                       </>
                     )}
                   </button>
