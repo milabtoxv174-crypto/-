@@ -20,6 +20,11 @@ export interface PlayerState {
   error: string | null;
 }
 
+const getBaseUrl = (): string => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || './';
+  return base.endsWith('/') ? base : `${base}/`;
+};
+
 export const MAIN_WEDDING_TRACK: WeddingTrack = {
   id: 'young-and-beautiful-lana-del-rey',
   title: 'Young and Beautiful',
@@ -28,16 +33,10 @@ export const MAIN_WEDDING_TRACK: WeddingTrack = {
   durationStr: '3:56',
   sources: [
     importedAudioFull,
-    './audio/Lana_Del_Rey_-_Young_And_Beautiful_9752830.mp3',
-    '/audio/Lana_Del_Rey_-_Young_And_Beautiful_9752830.mp3',
+    `${getBaseUrl()}audio/young_and_beautiful.mp3`,
+    `${getBaseUrl()}young_and_beautiful.mp3`,
     './audio/young_and_beautiful.mp3',
-    '/audio/young_and_beautiful.mp3',
-    './audio/young_and_beautiful_full.mp3',
-    '/audio/young_and_beautiful_full.mp3',
     './young_and_beautiful.mp3',
-    '/young_and_beautiful.mp3',
-    './young_and_beautiful_full.mp3',
-    '/young_and_beautiful_full.mp3',
   ],
 };
 
@@ -199,23 +198,44 @@ class WeddingAudioPlayer {
           this.audioElement.src = MAIN_WEDDING_TRACK.sources[this.currentSourceIdx];
         }
         this.audioElement.volume = this.isMuted ? 0 : this.volume;
+        this.isLoading = true;
+        this.notify();
+
         await this.audioElement.play();
         this.isPlaying = true;
+        this.isLoading = false;
         this.error = null;
         this.notify();
         return true;
-      } catch (err) {
-        console.warn('Direct HTML5 audio play error, retrying fallback source...', err);
+      } catch (err: any) {
+        console.warn('Audio play notice:', err?.name || err);
+        // If aborted or waiting for data, listen to canplay and resume
+        if (err?.name === 'AbortError' || this.audioElement.readyState < 2) {
+          this.isPlaying = true;
+          this.isLoading = true;
+          this.notify();
+          const resumeOnCanPlay = () => {
+            if (this.isPlaying && this.audioElement) {
+              this.audioElement.play().catch(() => {});
+            }
+          };
+          this.audioElement.addEventListener('canplay', resumeOnCanPlay, { once: true });
+          return true;
+        }
+
+        // If source actually failed, try next fallback source
         if (this.currentSourceIdx < MAIN_WEDDING_TRACK.sources.length - 1) {
           this.currentSourceIdx += 1;
           this.audioElement.src = MAIN_WEDDING_TRACK.sources[this.currentSourceIdx];
+          this.audioElement.load();
           try {
             await this.audioElement.play();
             this.isPlaying = true;
+            this.isLoading = false;
             this.notify();
             return true;
           } catch (e) {
-            console.warn('Playback failed:', e);
+            console.warn('Fallback playback waiting/error:', e);
           }
         }
       }

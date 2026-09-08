@@ -67,6 +67,9 @@ export const HeaderHero: React.FC<HeaderHeroProps> = ({
           src={heroCouplePhoto}
           alt="Pyotr & Viktoria Wedding Portrait"
           referrerPolicy="no-referrer"
+          fetchPriority="high"
+          loading="eager"
+          decoding="async"
           className="w-full h-[120%] object-cover opacity-25 filter blur-[1.5px] scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#051a14]/90 via-[#0a2a22]/95 to-[#051a14]" />

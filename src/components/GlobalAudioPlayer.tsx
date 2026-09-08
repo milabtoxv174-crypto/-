@@ -15,15 +15,11 @@ export const GlobalAudioPlayer: React.FC = () => {
       ref={audioRef}
       id="wedding-main-audio"
       src={MAIN_WEDDING_TRACK.sources[0]}
-      preload="auto"
+      preload="metadata"
       loop
       playsInline
       className="hidden"
       aria-hidden="true"
-    >
-      {MAIN_WEDDING_TRACK.sources.map((src, i) => (
-        <source key={i} src={src} type="audio/mpeg" />
-      ))}
-    </audio>
+    />
   );
 };

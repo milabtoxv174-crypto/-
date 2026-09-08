@@ -4,6 +4,56 @@ import { BotanicalCorner, FloralDivider } from './FloralDecor';
 import { loadStoredPhotos, savePhotosToStorage, clearStoredPhotos, fileToDataUrl } from '../utils/photoStorage';
 import { DEFAULT_WEDDING_PHOTOS } from '../data/defaultPhotos';
 
+const GalleryPhotoCard: React.FC<{
+  imgSrc: string;
+  idx: number;
+  onOpen: () => void;
+}> = ({ imgSrc, idx, onOpen }) => {
+  const [loaded, setLoaded] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(imgSrc);
+
+  const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || './';
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  const fallbackSrc = `${cleanBase}photos/wedding_photo_0${idx + 1}.jpg`;
+
+  return (
+    <div
+      onClick={onOpen}
+      className="group relative h-72 sm:h-80 rounded-xl overflow-hidden border border-[#c5a059]/40 cursor-pointer shadow-lg transition-all duration-500 hover:border-[#ffd700] hover:shadow-2xl hover:shadow-[#c5a059]/25 bg-[#051a14]"
+    >
+      {/* Shimmer Placeholder while loading */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-[#072019] flex items-center justify-center animate-pulse">
+          <Camera className="w-8 h-8 text-[#c5a059]/30" />
+        </div>
+      )}
+
+      <img
+        src={currentSrc}
+        alt={`Свадебное фото ${idx + 1}`}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (currentSrc !== fallbackSrc) {
+            setCurrentSrc(fallbackSrc);
+          }
+        }}
+        className={`w-full h-full object-cover transition-all duration-700 ease-out group-hover:scale-105 filter brightness-[0.98] group-hover:brightness-105 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+
+      {/* Subtle Hover Glow Border & Zoom Icon */}
+      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none flex items-center justify-center">
+        <div className="p-3 rounded-full bg-[#051a14]/80 text-[#ffd700] border border-[#c5a059] backdrop-blur-sm shadow-xl transform scale-90 group-hover:scale-100 transition-transform duration-300">
+          <Maximize2 className="w-5 h-5" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const Gallery: React.FC = () => {
   const [photos, setPhotos] = useState<string[]>(DEFAULT_WEDDING_PHOTOS);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -243,25 +293,12 @@ export const Gallery: React.FC = () => {
         {!isLoading && photos.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {photos.map((imgSrc, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleOpenLightbox(idx)}
-                className="group relative h-72 sm:h-80 rounded-xl overflow-hidden border border-[#c5a059]/40 cursor-pointer shadow-lg transition-all duration-500 hover:border-[#ffd700] hover:shadow-2xl hover:shadow-[#c5a059]/25 bg-[#051a14]"
-              >
-                <img
-                  src={imgSrc}
-                  alt={`Свадебное фото ${idx + 1}`}
-                  loading="lazy"
-                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 filter brightness-[0.98] group-hover:brightness-105"
-                />
-
-                {/* Subtle Hover Glow Border & Zoom Icon */}
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none flex items-center justify-center">
-                  <div className="p-3 rounded-full bg-[#051a14]/80 text-[#ffd700] border border-[#c5a059] backdrop-blur-sm shadow-xl transform scale-90 group-hover:scale-100 transition-transform duration-300">
-                    <Maximize2 className="w-5 h-5" />
-                  </div>
-                </div>
-              </div>
+              <GalleryPhotoCard
+                key={`${idx}-${imgSrc.slice(-15)}`}
+                imgSrc={imgSrc}
+                idx={idx}
+                onOpen={() => handleOpenLightbox(idx)}
+              />
             ))}
           </div>
         )}
