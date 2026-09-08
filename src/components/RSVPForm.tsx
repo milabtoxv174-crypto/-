@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle2, Heart, GlassWater, Bus, UserCheck } from 'lucide-react';
+import { Send, CheckCircle2, Heart, GlassWater, Bus, UserCheck, RefreshCw } from 'lucide-react';
 import { RSVPResponse } from '../types';
 import { BotanicalCorner, FloralDivider } from './FloralDecor';
 import { sendRsvpToGoogleSheets } from '../utils/googleSheetsSync';
@@ -19,6 +19,7 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
   const [transferNeeded, setTransferNeeded] = useState<boolean>(true);
   const [message, setMessage] = useState<string>('');
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [savedTicket, setSavedTicket] = useState<RSVPResponse | null>(null);
 
   useEffect(() => {
@@ -58,12 +59,14 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim()) return;
 
+    setIsSubmitting(true);
+
     const rsvp: RSVPResponse = {
-      id: Date.now().toString(),
+      id: savedTicket?.id || Date.now().toString(),
       guestName: guestName.trim(),
       attendance,
       drinks: attendance === 'yes' ? selectedDrinks : [],
@@ -77,15 +80,21 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
 
       const allRsvpsRaw = localStorage.getItem('petr_viktoria_all_rsvps');
       const allRsvps: RSVPResponse[] = allRsvpsRaw ? JSON.parse(allRsvpsRaw) : [];
-      const updatedList = [rsvp, ...allRsvps.filter((r) => r.guestName !== rsvp.guestName)];
+      const updatedList = [rsvp, ...allRsvps.filter((r) => r.guestName.toLowerCase() !== rsvp.guestName.toLowerCase())];
       localStorage.setItem('petr_viktoria_all_rsvps', JSON.stringify(updatedList));
     } catch (err) {
       console.warn("Storage save error", err);
     }
 
+    try {
+      await sendRsvpToGoogleSheets(rsvp);
+    } catch (err) {
+      console.warn("Google Sheets send error", err);
+    }
+
+    setIsSubmitting(false);
     setSavedTicket(rsvp);
     setIsSubmitted(true);
-    sendRsvpToGoogleSheets(rsvp);
 
     if (onResponseSubmitted) {
       onResponseSubmitted(rsvp);
@@ -176,12 +185,14 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
               Спасибо! С нетерпением ждем встречи с вами 30 сентября 2026 года!
             </p>
 
-            <button
-              onClick={() => setIsSubmitted(false)}
-              className="px-5 py-2.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffffff] text-xs font-sans-clean font-semibold rounded-lg border border-[#c5a059] transition-colors cursor-pointer"
-            >
-              Изменить ответ
-            </button>
+            <div className="pt-2">
+              <button
+                onClick={() => setIsSubmitted(false)}
+                className="px-5 py-2.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffffff] text-xs font-sans-clean font-semibold rounded-lg border border-[#c5a059] transition-colors cursor-pointer"
+              >
+                Изменить ответ
+              </button>
+            </div>
           </div>
         ) : (
           /* Interactive RSVP Form */
@@ -333,10 +344,20 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-4 bg-[#c5a059] hover:bg-[#d8b46e] text-[#051a14] font-sans-clean font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center space-x-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+              disabled={isSubmitting}
+              className="w-full py-4 bg-[#c5a059] hover:bg-[#d8b46e] text-[#051a14] font-sans-clean font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center space-x-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4 mr-1" />
-              <span>Отправить ответ (RSVP)</span>
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+                  <span>Сохранение и отправка...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-1" />
+                  <span>Отправить ответ (RSVP)</span>
+                </>
+              )}
             </button>
           </form>
         )}

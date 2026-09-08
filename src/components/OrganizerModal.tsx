@@ -25,6 +25,7 @@ import {
   Key,
   LogOut,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { RSVPResponse } from '../types';
 import { buildGuestUrl, formatGuestSalutation } from '../utils/greeting';
@@ -33,6 +34,8 @@ import {
   getGoogleSheetsWebhookUrl,
   setGoogleSheetsWebhookUrl,
   sendRsvpToGoogleSheets,
+  fetchRsvpsFromGoogleSheets,
+  getLastCloudSyncTime,
   exportRsvpsToCsv,
 } from '../utils/googleSheetsSync';
 
@@ -75,9 +78,9 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
 
   // Settings & Google Sheets State
   const [organizerPhone, setOrganizerPhone] = useState('79605850817');
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState(() => getGoogleSheetsWebhookUrl());
   const [settingsSaved, setSettingsSaved] = useState(false);
-  const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState(() => getGoogleSheetsWebhookUrl());
   const [googleSheetsSaved, setGoogleSheetsSaved] = useState(false);
   const [testSyncStatus, setTestSyncStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [testSyncMessage, setTestSyncMessage] = useState<string | null>(null);
@@ -85,6 +88,10 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
   const [bulkSyncMessage, setBulkSyncMessage] = useState<string | null>(null);
   const [copiedScript, setCopiedScript] = useState(false);
   const [showScriptCode, setShowScriptCode] = useState(false);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncFeedback, setCloudSyncFeedback] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [copiedConfigSnippet, setCopiedConfigSnippet] = useState(false);
 
   const drinkOptions = [
     'Шампанское / Игристое',
@@ -175,6 +182,32 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
     setBulkSyncMessage(`✓ Все ответы (${sent}) успешно отправлены в Google Таблицу!`);
   };
 
+  const handleFetchFromGoogleSheets = async () => {
+    const url = googleSheetsUrl.trim() || getGoogleSheetsWebhookUrl();
+    if (!url) {
+      setCloudSyncFeedback('Сначала укажите URL Google Таблицы во вкладке «Google Таблица».');
+      setTimeout(() => setCloudSyncFeedback(null), 4000);
+      return;
+    }
+
+    setIsCloudSyncing(true);
+    setCloudSyncFeedback('Загружаем ответы гостей из Google Таблицы...');
+
+    const res = await fetchRsvpsFromGoogleSheets(url);
+    setIsCloudSyncing(false);
+
+    if (res.success) {
+      loadRSVPs();
+      const timeStr = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      setLastSyncTime(timeStr);
+      setCloudSyncFeedback(`✓ Загружено ${res.rsvps.length} ответов из Google Таблицы (в ${timeStr})`);
+      setTimeout(() => setCloudSyncFeedback(null), 5000);
+    } else {
+      setCloudSyncFeedback(`Ошибка загрузки: ${res.error || 'Проверьте ссылку скрипта'}`);
+      setTimeout(() => setCloudSyncFeedback(null), 6000);
+    }
+  };
+
   const handleCopyAppsScript = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
@@ -252,8 +285,27 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
       loadRSVPs();
       loadSettings();
       loadSavedLinks();
+      const lastSyncRaw = getLastCloudSyncTime();
+      if (lastSyncRaw) {
+        try {
+          const d = new Date(lastSyncRaw);
+          setLastSyncTime(d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+        } catch (e) {}
+      }
       if (defaultTab) {
         setActiveTab(defaultTab);
+      }
+
+      // Если вебхук настроен, автоматически обновляем данные в фоне
+      const webhook = getGoogleSheetsWebhookUrl();
+      if (webhook) {
+        fetchRsvpsFromGoogleSheets(webhook).then((res) => {
+          if (res.success) {
+            loadRSVPs();
+            const timeStr = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            setLastSyncTime(timeStr);
+          }
+        });
       }
     }
   }, [isOpen, defaultTab]);
@@ -529,6 +581,57 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
           {/* TAB 1: RSVPS */}
           {activeTab === 'rsvps' && (
             <div className="space-y-5">
+              {/* Cloud Sync Status & Refresh Bar */}
+              <div className="bg-[#051a14] border border-[#c5a059]/60 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans-clean">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${googleSheetsUrl ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <div>
+                    <div className="text-[#fdfcf0] font-semibold flex items-center gap-1.5">
+                      <span>{googleSheetsUrl ? 'Синхронизация с Google Таблицей активна' : 'Google Таблица не подключена'}</span>
+                      {lastSyncTime && (
+                        <span className="text-[#ffd700] text-[11px] font-normal">
+                          (синхр. в {lastSyncTime})
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-[#fdfcf0]/70">
+                      {googleSheetsUrl
+                        ? 'Ответы гостей из облачной таблицы объединяются со списком в приложении.'
+                        : 'Подключите Google Таблицу во вкладке «Google Таблица», чтобы ответы гостей с любых устройств отображались прямо тут.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {googleSheetsUrl ? (
+                    <button
+                      type="button"
+                      onClick={handleFetchFromGoogleSheets}
+                      disabled={isCloudSyncing}
+                      className="px-3 py-1.5 bg-[#c5a059] hover:bg-[#d8b46e] disabled:opacity-50 text-[#051a14] font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isCloudSyncing ? 'Загрузка...' : 'Обновить из таблицы'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('sheets')}
+                      className="px-3 py-1.5 bg-[#c5a059] hover:bg-[#d8b46e] text-[#051a14] font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Подключить таблицу</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {cloudSyncFeedback && (
+                <div className="p-2.5 rounded-lg text-xs bg-emerald-950/80 border border-emerald-700/60 text-emerald-200 font-sans-clean">
+                  {cloudSyncFeedback}
+                </div>
+              )}
+
               {/* Top Help Banner */}
               <div className="bg-[#051a14] border border-[#c5a059]/60 rounded-xl p-3.5 sm:p-4 text-xs font-sans-clean leading-relaxed space-y-2">
                 <div className="flex items-center gap-2 text-[#ffd700] font-semibold">
@@ -1117,6 +1220,16 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-[#c5a059]/20">
                   <button
                     type="button"
+                    onClick={handleFetchFromGoogleSheets}
+                    disabled={isCloudSyncing}
+                    className="px-3 py-1.5 bg-[#c5a059] hover:bg-[#dfba6d] text-[#051a14] font-bold rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isCloudSyncing ? 'Загрузка...' : '📥 Загрузить ответы из таблицы'}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleTestGoogleSheets}
                     disabled={testSyncStatus === 'sending'}
                     className="px-3 py-1.5 bg-[#0a2a22] hover:bg-[#113a30] text-[#ffd700] border border-[#c5a059]/60 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
@@ -1283,6 +1396,44 @@ export const OrganizerModal: React.FC<OrganizerModalProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* GitHub Pages & Permanent Cloud Configuration Card */}
+              <div className="bg-[#051a14] border-2 border-[#ffd700]/70 rounded-xl p-4 sm:p-5 space-y-3 font-sans-clean">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-[#ffd700]" />
+                  <h4 className="font-serif-display text-base text-[#ffd700] font-semibold">
+                    Как связать сайт на GitHub Pages с таблицей навсегда?
+                  </h4>
+                </div>
+                <p className="text-xs text-[#fdfcf0]/85 leading-relaxed">
+                  На GitHub Pages каждый гость открывает сайт со своего личного телефона (в изолированном браузере). Чтобы сайт знал единую ссылку на вашу таблицу без необходимости вводить её вручную в каждом браузере:
+                </p>
+                <div className="bg-[#0a2a22] p-3 rounded-lg border border-[#1d5844] space-y-2 text-xs">
+                  <p className="text-[#ffd700] font-semibold">
+                    В файле проекта <code className="text-[#ffffff] bg-[#051a14] px-1.5 py-0.5 rounded font-mono">src/config/weddingConfig.ts</code> вставьте полученную ссылку:
+                  </p>
+                  <pre className="p-2.5 bg-[#03100c] text-emerald-300 font-mono text-[11px] rounded border border-[#1d5844]/80 overflow-x-auto">
+                    {`googleSheetsWebhookUrl: '${googleSheetsUrl.trim() || 'https://script.google.com/macros/s/.../exec'}',`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText(`googleSheetsWebhookUrl: '${googleSheetsUrl.trim()}',`);
+                        setCopiedConfigSnippet(true);
+                        setTimeout(() => setCopiedConfigSnippet(false), 3000);
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-[#c5a059] hover:bg-[#dfba6d] text-[#051a14] font-bold rounded text-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>{copiedConfigSnippet ? 'Скопировано!' : 'Скопировать строку для weddingConfig.ts'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#fdfcf0]/70">
+                  После этого сохраните файл и сделайте commit/push на GitHub. Теперь любой гость, отправляя ответ на странице GitHub Pages, автоматически запишет его в таблицу, а в панели организатора ответы будут загружаться автоматически!
+                </p>
               </div>
             </div>
           )}
