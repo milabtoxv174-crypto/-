@@ -9,6 +9,11 @@ interface RSVPFormProps {
   onResponseSubmitted?: (response: RSVPResponse) => void;
 }
 
+const getGuestStorageKey = (name: string) => {
+  const clean = name.trim().toLowerCase();
+  return clean ? `petr_viktoria_rsvp_${encodeURIComponent(clean)}` : 'petr_viktoria_anonymous_rsvp';
+};
+
 export const RSVPForm: React.FC<RSVPFormProps> = ({
   initialGuestName = '',
   onResponseSubmitted,
@@ -22,25 +27,84 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [savedTicket, setSavedTicket] = useState<RSVPResponse | null>(null);
 
+  // Check if THIS specific guest has already submitted an RSVP
   useEffect(() => {
-    if (initialGuestName && !guestName) {
-      setGuestName(initialGuestName);
-    }
-  }, [initialGuestName]);
+    const targetName = initialGuestName.trim();
+    setGuestName(targetName);
 
-  // Check if guest already submitted an RSVP
-  useEffect(() => {
+    // Clean up legacy global key that caused all guests to share the same answer
     try {
-      const existing = localStorage.getItem('petr_viktoria_user_rsvp');
-      if (existing) {
-        const parsed = JSON.parse(existing) as RSVPResponse;
+      localStorage.removeItem('petr_viktoria_user_rsvp');
+    } catch {}
+
+    if (targetName) {
+      const key = getGuestStorageKey(targetName);
+      try {
+        const specificSaved = localStorage.getItem(key);
+        if (specificSaved) {
+          const parsed = JSON.parse(specificSaved) as RSVPResponse;
+          setSavedTicket(parsed);
+          setIsSubmitted(true);
+          setAttendance(parsed.attendance);
+          setSelectedDrinks(parsed.drinks || []);
+          setTransferNeeded(parsed.transferNeeded ?? true);
+          setMessage(parsed.message || '');
+          return;
+        }
+
+        // Also check if this guest exists in all_rsvps master list
+        const allRsvpsRaw = localStorage.getItem('petr_viktoria_all_rsvps');
+        if (allRsvpsRaw) {
+          const allRsvps = JSON.parse(allRsvpsRaw) as RSVPResponse[];
+          const match = allRsvps.find(
+            (r) => r.guestName.trim().toLowerCase() === targetName.toLowerCase()
+          );
+          if (match) {
+            setSavedTicket(match);
+            setIsSubmitted(true);
+            setAttendance(match.attendance);
+            setSelectedDrinks(match.drinks || []);
+            setTransferNeeded(match.transferNeeded ?? true);
+            setMessage(match.message || '');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading saved RSVP for guest', e);
+      }
+
+      // If this guest has NOT submitted: ensure fresh, clean, unsubmitted form!
+      setIsSubmitted(false);
+      setSavedTicket(null);
+      setAttendance('yes');
+      setSelectedDrinks(['Шампанское / Игристое', 'Красное вино']);
+      setTransferNeeded(true);
+      setMessage('');
+      return;
+    }
+
+    // No targetName (general unpersonalized link)
+    try {
+      const anonSaved = localStorage.getItem('petr_viktoria_anonymous_rsvp');
+      if (anonSaved) {
+        const parsed = JSON.parse(anonSaved) as RSVPResponse;
         setSavedTicket(parsed);
         setIsSubmitted(true);
+        setAttendance(parsed.attendance);
+        setSelectedDrinks(parsed.drinks || []);
+        setTransferNeeded(parsed.transferNeeded ?? true);
+        setMessage(parsed.message || '');
+        return;
       }
-    } catch (e) {
-      console.warn("Error reading local RSVP", e);
-    }
-  }, []);
+    } catch {}
+
+    setIsSubmitted(false);
+    setSavedTicket(null);
+    setAttendance('yes');
+    setSelectedDrinks(['Шампанское / Игристое', 'Красное вино']);
+    setTransferNeeded(true);
+    setMessage('');
+  }, [initialGuestName]);
 
   const drinkOptions = [
     'Шампанское / Игристое',
@@ -76,11 +140,17 @@ export const RSVPForm: React.FC<RSVPFormProps> = ({
     };
 
     try {
-      localStorage.setItem('petr_viktoria_user_rsvp', JSON.stringify(rsvp));
+      // Save specifically for this guest
+      const specificKey = getGuestStorageKey(rsvp.guestName);
+      localStorage.setItem(specificKey, JSON.stringify(rsvp));
+      localStorage.removeItem('petr_viktoria_user_rsvp');
 
       const allRsvpsRaw = localStorage.getItem('petr_viktoria_all_rsvps');
       const allRsvps: RSVPResponse[] = allRsvpsRaw ? JSON.parse(allRsvpsRaw) : [];
-      const updatedList = [rsvp, ...allRsvps.filter((r) => r.guestName.toLowerCase() !== rsvp.guestName.toLowerCase())];
+      const updatedList = [
+        rsvp,
+        ...allRsvps.filter((r) => r.guestName.trim().toLowerCase() !== rsvp.guestName.trim().toLowerCase()),
+      ];
       localStorage.setItem('petr_viktoria_all_rsvps', JSON.stringify(updatedList));
     } catch (err) {
       console.warn("Storage save error", err);

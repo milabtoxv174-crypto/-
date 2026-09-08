@@ -59,7 +59,7 @@ export const MusicPlayerWidget: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 max-w-sm w-full px-2 sm:px-0 pointer-events-auto">
+    <div className="fixed bottom-3 inset-x-3 sm:inset-x-auto sm:right-4 sm:bottom-4 z-40 sm:w-80 pointer-events-auto">
       <div className="bg-[#0a2a22]/95 backdrop-blur-md border border-[#c5a059] rounded-2xl shadow-2xl overflow-hidden transition-all duration-300">
         {/* Hidden File Input for Custom Audio Replacement */}
         <input

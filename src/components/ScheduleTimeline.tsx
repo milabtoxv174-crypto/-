@@ -34,8 +34,8 @@ export const ScheduleTimeline: React.FC = () => {
           </div>
 
           {/* Time & Card Content */}
-          <div className="ml-12 sm:ml-0 sm:w-1/2 sm:pr-10 sm:text-right w-full mb-4 sm:mb-0">
-            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-6 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
+          <div className="w-full pl-12 sm:pl-0 sm:w-1/2 sm:pr-8 sm:text-right mb-4 sm:mb-0">
+            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-5 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
               <div className="inline-flex items-center space-x-1.5 font-sans-clean text-xs uppercase tracking-widest text-[#ffd700] mb-2 bg-[#051a14] px-3.5 py-1 rounded-full border border-[#c5a059]/60 font-semibold">
                 <Clock className="w-3.5 h-3.5" />
                 <span>15:00</span>
@@ -113,8 +113,8 @@ export const ScheduleTimeline: React.FC = () => {
           <div className="hidden sm:block sm:w-1/2" />
 
           {/* Time & Card Content */}
-          <div className="ml-12 sm:ml-0 sm:w-1/2 sm:pl-10 w-full mb-4 sm:mb-0">
-            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-6 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
+          <div className="w-full pl-12 sm:pl-0 sm:w-1/2 sm:pl-8 mb-4 sm:mb-0">
+            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-5 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
               <div className="inline-flex items-center space-x-1.5 font-sans-clean text-xs uppercase tracking-widest text-[#ffd700] mb-2 bg-[#051a14] px-3.5 py-1 rounded-full border border-[#c5a059]/60 font-semibold">
                 <Clock className="w-3.5 h-3.5" />
                 <span>16:00</span>
@@ -188,8 +188,8 @@ export const ScheduleTimeline: React.FC = () => {
           </div>
 
           {/* Time & Card Content (Left side) */}
-          <div className="ml-12 sm:ml-0 sm:w-1/2 sm:pr-10 sm:text-right w-full">
-            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-6 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
+          <div className="w-full pl-12 sm:pl-0 sm:w-1/2 sm:pr-8 sm:text-right">
+            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-5 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
               <div className="inline-flex items-center space-x-1.5 font-sans-clean text-xs uppercase tracking-widest text-[#ffd700] mb-2 bg-[#051a14] px-3.5 py-1 rounded-full border border-[#c5a059]/60 font-semibold">
                 <Clock className="w-3.5 h-3.5" />
                 <span>17:00</span>
@@ -267,8 +267,8 @@ export const ScheduleTimeline: React.FC = () => {
           <div className="hidden sm:block sm:w-1/2" />
 
           {/* Time & Card Content (Right side) */}
-          <div className="ml-12 sm:ml-0 sm:w-1/2 sm:pl-10 w-full">
-            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-6 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
+          <div className="w-full pl-12 sm:pl-0 sm:w-1/2 sm:pl-8">
+            <div className="bg-[#0a2a22] border border-[#c5a059] rounded-2xl p-5 sm:p-7 shadow-2xl relative group-hover:border-[#ffd700] transition-all bg-gradient-to-b from-[#0a2a22] to-[#07201a]">
               <div className="inline-flex items-center space-x-1.5 font-sans-clean text-xs uppercase tracking-widest text-[#ffd700] mb-2 bg-[#051a14] px-3.5 py-1 rounded-full border border-[#c5a059]/60 font-semibold">
                 <Clock className="w-3.5 h-3.5" />
                 <span>23:00</span>
